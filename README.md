@@ -41,7 +41,9 @@ Every step below is clickable, and state persists across reloads via `localStora
    the Views → Opened → Tested → Would Use → Would Pay funnel fills in, and an AI summary
    unlocks at 7 sessions (what testers like / dislike / what to improve next).
 
-Start with 15 credits, so one full test (+5) is enough to afford a launch.
+Start with 15 credits, so one full test (+5) is enough to afford a launch — or buy 20 for $4.99
+and launch immediately. Both routes are offered side by side wherever you run short, with the
+trade spelled out: buying is instant, testing is free and is the only thing that raises your rank.
 
 ## What's in it
 
@@ -55,7 +57,60 @@ Start with 15 credits, so one full test (+5) is enough to afford a launch.
 | Leaderboard | `#/leaderboard` | Hottest, Most Tested, Most Would Pay, Fastest Rising, Best Builder, Best Tester |
 | My Lab | `#/lab` | Experiments, launched, killed, tested, saved, reputation, credit ledger |
 | Builder profile | `#/u/dev_kaz` | Public version of My Lab |
+| Buy credits | sheet, from any short-on-credits moment | Earn-vs-buy comparison, 3 packs, simulated checkout |
+| Pricing | `#/pricing` | Packs, Boost, Pro, and the five balance rules |
 | Graveyard | `#/discover?feed=grave` | Killed prototypes: what they built, how long, final score, why, what they learned |
+
+## Making money without breaking the loop
+
+The scarce resource on ProtoBuzz is not credits, it is **tester attention**. If $4.99 minted the
+same 20 credits that four tests earn, nobody would test and there would be nothing to sell. So
+cash and credits deliberately buy different things.
+
+**Two products, two queues.**
+
+| | Credit packs | Boost |
+| --- | --- | --- |
+| Price | $4.99 / 20 · $11.99 / 60 · $28.99 / 200 | $19 |
+| What it buys | A place in the **peer queue** | The **paid panel**: 25 targeted testers in 24h |
+| Who tests you | Other builders, paid in credits | Testers paid in cash (~$0.40 a test) |
+| Margin | High — no cash leaves the system | ~$8 after payouts and processing |
+
+Plus **Pro at $12/month** (unlimited launches, private testing before you go public, two custom
+questions, funnel history, AI summary from the first tester). Packs are the impulse buy that
+converts a stuck builder at 11pm; Pro is the revenue that compounds.
+
+**The five rules that keep it balanced** (all stated in-product on `#/pricing`):
+
+1. **Money buys time, not rank.** Bought credits launch a prototype; only testing raises builder
+   reputation and position in Trending. Someone who only pays can always launch and can never
+   out-rank someone who tests. This is the load-bearing rule — without it the currency collapses.
+2. **Two queues, two currencies.** Selling credits never quietly drains tester supply, because
+   peer tests are paid in credits and only Boost draws cash out of the business.
+3. **Paid demand is capped by real supply.** Boost sells only as many tests as the panel can
+   deliver that day. "Sold out" is honest; 25 testers who do not exist is not.
+4. **Feedback is paid on usefulness, not volume.** The +2 lands when the builder marks the
+   improvement useful. Twelve tests a day maximum, plus the session clock, so farming credits is
+   slower than earning them honestly.
+5. **The free path never closes.** Every launch is reachable with four tests. The free feed is the
+   reason anyone visits; paywalling it kills the supply that the paying customers are buying.
+
+**Why testers still test once buying exists:** credits earned by testing are the only ones that
+cash out (100 tested credits = $8, funded by Boost revenue), and the only ones that move
+reputation. Bought credits are spend-only, which also closes the obvious arbitrage — buy cheap
+credits, cash them out.
+
+**Unit economics, roughly.** On a $4.99 pack, payment processing takes ~$0.44 (8.8% — small
+tickets are expensive, which is why the $11.99 tier is flagged best value) and serving the
+launch costs cents, so nearly all of it is margin. On a $19 Boost, ~$10 goes to testers and ~$0.85
+to processing, leaving ~$8. The honest risk to watch: at $4.99 most builders will pay rather than
+test four prototypes, so tester supply is the side you will have to subsidise deliberately —
+Boost exists to buy that supply back when peers are slow.
+
+**Not implemented here (and required before taking real money):** a payment provider. The checkout
+in this prototype is simulated — no card details are collected and nothing is charged. A real
+build should hand off to a hosted payment page (Stripe Checkout or Payment Element) so card data
+never reaches this app, and add refunds, receipts, tax/VAT handling, and fraud limits on cash-out.
 
 ## Design
 
@@ -76,7 +131,7 @@ so the prototype ships with no external image dependencies.
 ```
 index.html        app shell, rails, bottom nav
 styles.css        design tokens + every component (dark-first, light theme included)
-src/data.js       mock data: 15 prototypes, 8 builders, graveyard, AI summaries
+src/data.js       mock data: 15 prototypes, 8 builders, graveyard, AI summaries, pricing
 src/app.js        router, views, testing flow, credits, interactions
 tools/bundle.mjs  inlines everything into dist/protobuzz.html
 ```

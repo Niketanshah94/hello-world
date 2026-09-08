@@ -30,7 +30,10 @@
       tested: {},             /* id -> {understood, use, pay, improve} */
       comments: {},           /* id -> [comment] */
       launched: [],           /* ids of prototypes the user submitted this session */
-      ledger: [{ label: "Welcome bonus", amount: 15 }],
+      earned: 0,              /* credits earned by testing — the only kind that cashes out */
+      purchased: 0,           /* credits bought with money */
+      boosted: [],            /* prototype ids on the paid tester panel */
+      ledger: [{ label: "Welcome bonus", amount: 15, kind: "earn" }],
       theme: null
     };
     try {
@@ -266,9 +269,12 @@
     }
   }
 
-  function addCredits(amount, label, originEl) {
+  function addCredits(amount, label, originEl, kind) {
+    kind = kind || (amount >= 0 ? "earn" : "spend");
     S.credits += amount;
-    S.ledger.unshift({ label: label, amount: amount });
+    if (kind === "earn" && amount > 0) S.earned += amount;
+    if (kind === "buy") S.purchased += amount;
+    S.ledger.unshift({ label: label, amount: amount, kind: kind });
     S.ledger = S.ledger.slice(0, 12);
     save();
     paintCredits();
@@ -427,7 +433,10 @@
       '<div class="lab-stat"><b class="mono">' + S.credits + '</b><span>credits</span></div>' +
       '<div class="lab-stat"><b>' + (done * 5) + '</b><span>earned</span></div>' +
       '<div class="lab-stat"><b>' + queue.length + '</b><span>in queue</span></div>' +
-      '</div>';
+      '</div>' +
+      '<div class="cost-note" style="margin-bottom:18px"><span class="credit-coin" style="color:var(--honey)"></span>' +
+      '<span>In a hurry? ' + D.PACKS[0].credits + ' credits for ' + money(D.PACKS[0].price) + ' launches you today — but only testing raises your builder rank.</span>' +
+      '<button class="btn btn-outline" style="margin-left:auto;flex:none" data-buy-credits="Skip the queue">Buy</button></div>';
 
     if (!queue.length) {
       return head + stats + '<div class="empty"><h3>Queue empty</h3><p>You have tested everything in front of you. Come back tomorrow, or launch something of your own.</p><button class="btn btn-primary" style="margin-top:16px" data-go="#/submit">Submit a prototype</button></div>';
@@ -559,12 +568,15 @@
     var focusable = sheetRoot.querySelector("button, textarea");
     if (focusable) focusable.focus();
   }
-  function closeSheet() {
+  function hideSheet() {
     sheetRoot.hidden = true;
     sheetRoot.innerHTML = "";
     sheetState = null;
     document.body.style.overflow = "";
     document.body.classList.remove("sheet-open");
+  }
+  function closeSheet() {
+    hideSheet();
     if (dirty) { dirty = false; render(); }
   }
 
@@ -603,6 +615,15 @@
       opts: [["Yes, happily", "y"], ["Only if it were cheap", "m"], ["No", "n"]] },
     { key: "improve", q: "What is the one thing you would improve?", help: "One sentence. This is the part builders actually read.", text: true }
   ];
+
+  /* Reputation is earned, never bought — the rule that keeps both loops alive. */
+  function myRep() {
+    return Math.min(99, builder(D.ME).rep + Object.keys(S.tested).length * 2);
+  }
+
+  function money(v) {
+    return "$" + (v % 1 === 0 ? v.toFixed(0) : v.toFixed(2));
+  }
 
   function scoreFormula(pr) {
     return Math.round(pr.understood * 0.25 + pr.use * 0.4 + pr.pay * 0.35) + Math.min(8, Math.round(pr.testers / 20));
@@ -725,6 +746,7 @@
           var need = Math.ceil((20 - S.credits) / 5);
           return '<span>Launching costs <b>20 credits</b>. You have <b data-credits>' + S.credits + '</b>. Test ' + need + ' more prototype' + (need === 1 ? '' : 's') + ' to get there.</span>';
         })()) +
+      (afford ? '' : '<button class="btn btn-outline" style="margin-left:auto;flex:none" data-buy-credits="Short on credits">Buy ' + money(D.PACKS[0].price) + '</button>') +
       '</div>';
 
     var body;
@@ -768,9 +790,10 @@
         '<p class="muted">Feedback question testers will answer:</p>' +
         '<p style="font-weight:600;margin-top:6px">“' + esc(draft.feedback || "—") + '”</p>' +
         '<div class="divider"></div>' + cost +
-        '<button class="btn btn-primary btn-lg btn-block" data-launch ' + (afford ? "" : "disabled") + '>' +
-        (afford ? "Launch prototype · −20 credits" : "Not enough credits") + '</button>' +
-        (afford ? "" : '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-go="#/test">Go earn credits</button>') +
+        (afford
+          ? '<button class="btn btn-primary btn-lg btn-block" data-launch>Launch prototype · −20 credits</button>'
+          : '<button class="btn btn-primary btn-lg btn-block" data-buy-credits="Launch ' + esc(draft.name || "your prototype") + '">Buy 20 credits · ' + money(D.PACKS[0].price) + '</button>' +
+            '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-go="#/test">Or test ' + Math.ceil((20 - S.credits) / 5) + ' prototypes — free</button>') +
         '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-draft-back>Back</button></div>';
     }
     return head + steps + (draft.step === 3 ? "" : cost) + body;
@@ -847,9 +870,11 @@
 
     var funnel = '<div class="funnel">' + steps.map(function (s, i) {
       var w = Math.max(4, (s.v / max) * 100);
+      var wide = w >= 18;
       var drop = i > 0 && steps[i - 1].v > 0 ? Math.round((s.v / steps[i - 1].v) * 100) + "%" : "";
       return '<div class="fn-row"><div class="fn-label">' + s.label + '</div>' +
-        '<div class="fn-bar"><i style="width:' + w + '%;background:' + s.c + '">' + n(s.v) + '</i>' +
+        '<div class="fn-bar"><i style="width:' + w + '%;background:' + s.c + '">' + (wide ? n(s.v) : "") + '</i>' +
+        (wide ? '' : '<span class="fn-out mono" style="left:calc(' + w + '% + 9px)">' + n(s.v) + '</span>') +
         (drop ? '<span class="fn-drop" style="position:absolute;right:10px;top:10px">' + drop + ' of previous</span>' : '') +
         '</div></div>';
     }).join("") + '</div>';
@@ -872,6 +897,19 @@
         '</div>'
       : '<div class="panel panel-quiet"><p class="muted">The AI summary unlocks at 7 tested sessions. You are at <b class="mono">' + tests + '</b>. Testers usually arrive within the hour — or spend credits to jump the queue.</p></div>';
 
+    var boosted = S.boosted.indexOf(p.id) > -1;
+    var boostCard = '<div class="section"><div class="panel boost-card">' +
+      '<div class="boost-top"><div><div class="verdict-label">' + (boosted ? "Boost running" : "Not enough testers?") + '</div>' +
+      '<div class="verdict-line">' + (boosted
+        ? D.BOOST.testers + ' paid testers are working through it'
+        : D.BOOST.testers + ' targeted testers in ' + D.BOOST.hours + ' hours') + '</div>' +
+      '<p class="muted" style="margin-top:6px">' + (boosted
+        ? 'Results land as they finish. Peer testers keep arriving alongside them.'
+        : esc(D.BOOST.blurb) + ' ' + money(D.BOOST.price) + ' — about ' + money(0.4) + ' of it reaches each tester.') + '</p></div>' +
+      '<span class="boost-price mono">' + (boosted ? "LIVE" : money(D.BOOST.price)) + '</span></div>' +
+      (boosted ? '' : '<button class="btn btn-mint btn-block" style="margin-top:14px" data-boost="' + p.id + '">Boost this prototype</button>') +
+      '</div></div>';
+
     return '<button class="back-link" data-back>' + ICON.back + ' Back</button>' +
       '<div class="page-head"><p class="page-kicker">Creator dashboard</p>' +
       '<h1 class="page-title">' + esc(p.name) + '</h1>' +
@@ -882,6 +920,7 @@
       '<div class="section"><div class="section-head"><h2 class="section-title">Funnel</h2><span class="muted">last 7 days</span></div>' +
       '<div class="panel">' + funnel + '</div></div>' +
       '<div class="section"><div class="section-head"><h2 class="section-title">What the tests say</h2></div>' + aiHtml + '</div>' +
+      boostCard +
       '<div class="section"><div class="section-head"><h2 class="section-title">Verified feedback</h2>' +
       '<button class="section-more" data-go="#/p/' + p.id + '">Open public page</button></div>' +
       '<div class="panel">' + (commentsOf(p).length
@@ -971,7 +1010,8 @@
       '<span class="rep-label mono">' + b.rep + '</span></div>' +
       (me ? '<div class="rep-bar"><span class="rep-label">Credits</span>' +
         '<span class="rep-track"><i data-credit-bar style="width:' + Math.min(100, S.credits / 20 * 100) + '%;background:var(--honey)"></i></span>' +
-        '<span class="rep-label mono" data-credits>' + S.credits + '</span></div>' : "") +
+        '<span class="rep-label mono" data-credits>' + S.credits + '</span></div>' +
+        '<p class="muted" style="margin-top:10px;position:relative">Reputation ' + myRep() + ' — earned from ' + Object.keys(S.tested).length + ' test' + (Object.keys(S.tested).length === 1 ? "" : "s") + '. Bought credits never move it.</p>' : "") +
       '</div>';
 
     var tabs = '<div class="seg" role="tablist">' +
@@ -1012,19 +1052,239 @@
         ? '<div class="mini-list">' + mine.map(function (p) {
             return '<div class="mini" data-go="' + (p.creator === D.ME ? "#/dash/" + p.id : "#/p/" + p.id) + '">' + mock(p) +
               '<div class="mini-body"><div class="mini-name">' + esc(p.name) + '</div>' +
-              '<div class="mini-sub">' + esc(p.stage) + ' · ' + p.testers + ' testers · ' + p.use + '% would use</div></div>' +
-              '<div class="mini-right">' + hex(p.score) + '</div></div>';
+              '<div class="mini-sub">' + esc(p.stage) + ' · ' + p.testers + ' testers · ' + p.use + '% would use</div>' +
+              (me ? '<button class="btn btn-ghost" style="margin-top:8px;padding:6px 12px;font-size:12.5px" data-boost="' + p.id + '">' +
+                (S.boosted.indexOf(p.id) > -1 ? "Boost running" : "Boost · " + money(D.BOOST.price)) + '</button>' : '') +
+              '</div><div class="mini-right">' + hex(p.score) + '</div></div>';
           }).join("") + '</div>'
         : '<div class="empty"><h3>No experiments yet</h3><p>Launch one for 20 credits and get tested tonight.</p><button class="btn btn-primary" style="margin-top:14px" data-go="#/submit">Submit a prototype</button></div>';
     }
 
+    var wallet = me ? '<div class="section"><div class="section-head"><h2 class="section-title">Wallet</h2>' +
+      '<button class="section-more" data-go="#/pricing">Pricing</button></div>' +
+      '<div class="panel"><div class="wallet-split">' +
+      '<div class="wallet-col"><span class="verdict-label">Earned by testing</span><b class="mono">' + S.earned + '</b>' +
+      '<span class="muted">cashes out</span></div>' +
+      '<div class="wallet-col"><span class="verdict-label">Bought</span><b class="mono">' + S.purchased + '</b>' +
+      '<span class="muted">spend only</span></div></div>' +
+      '<div class="stat-track" style="margin-top:14px"><i style="width:' + Math.min(100, S.earned / D.PAYOUT.credits * 100) + '%;background:var(--mint)"></i></div>' +
+      '<p class="muted" style="margin-top:8px">' + D.PAYOUT.credits + ' tested credits = ' + money(D.PAYOUT.usd) + ' payout, funded by Boost purchases. Bought credits are not cashable — that is what stops anyone buying credits to sell them back.</p>' +
+      '<div class="rowgap" style="margin-top:12px">' +
+      '<button class="btn btn-ghost" style="flex:1" data-cashout>Cash out</button>' +
+      '<button class="btn btn-primary" style="flex:1" data-buy-credits="Add credits">Buy credits</button></div></div></div>' : "";
+
     var ledger = me ? '<div class="section"><div class="section-head"><h2 class="section-title">Credit ledger</h2>' +
       '<span class="muted mono">balance ' + S.credits + '</span></div><div class="panel">' +
       S.ledger.map(function (l) {
-        return '<div class="ledger-row"><span>' + esc(l.label) + '</span><b class="' + (l.amount >= 0 ? "plus" : "minus") + '">' + (l.amount >= 0 ? "+" : "") + l.amount + '</b></div>';
+        var val = l.usd != null ? money(l.usd) : (l.amount >= 0 ? "+" : "") + l.amount;
+        var tone = l.usd != null ? "" : l.amount >= 0 ? "plus" : "minus";
+        return '<div class="ledger-row"><span>' + esc(l.label) +
+          (l.kind === "buy" ? ' <span class="tag tag-verified">paid</span>' : '') +
+          '</span><b class="' + tone + '">' + val + '</b></div>';
       }).join("") + '</div></div>' : "";
 
-    return (me ? "" : '<button class="back-link" data-back>' + ICON.back + ' Back</button>') + head + tabs + body + ledger;
+    return (me ? "" : '<button class="back-link" data-back>' + ICON.back + ' Back</button>') + head + tabs + body + wallet + ledger;
+  };
+
+
+  /* ------------------------------------------------------------ buying credits
+     Simulated checkout only: no card details are collected and nothing is
+     charged. A real build would hand off to a hosted payment page (Stripe
+     Checkout / Payment Element) so card data never touches this app. */
+  var buyState = { packId: "starter", step: "pick", reason: "" };
+
+  function packById(id) {
+    var found = D.PACKS[0];
+    D.PACKS.forEach(function (p) { if (p.id === id) found = p; });
+    return found;
+  }
+
+  function openBuyCredits(reason) {
+    buyState = { packId: buyState.packId || "starter", step: "pick", reason: reason || "" };
+    renderBuyStep();
+  }
+
+  function renderBuyStep() {
+    if (buyState.step === "pick") return renderBuyPick();
+    if (buyState.step === "checkout") return renderBuyCheckout();
+    return renderBuyDone();
+  }
+
+  function renderBuyPick() {
+    var need = Math.max(0, 20 - S.credits);
+    var tests = Math.ceil(need / 5);
+
+    var paths = '<div class="two-paths">' +
+      '<div class="path"><b>Earn it</b>' +
+      '<span>' + (need > 0 ? tests + " test" + (tests === 1 ? "" : "s") + " · about " + (tests * 2) + " min" : "You already have enough") + '</span>' +
+      '<span class="path-win">+' + (tests * 2) + ' reputation</span>' +
+      '<button class="btn btn-ghost btn-block" data-close-sheet data-go="#/test">Go test</button></div>' +
+      '<div class="path on"><b>Buy it</b><span>Instant, no queue</span>' +
+      '<span class="path-lose">Reputation unchanged</span>' +
+      '<span class="muted" style="font-size:12px">Money buys time here, never rank.</span></div>' +
+      '</div>';
+
+    var packs = '<div class="packs">' + D.PACKS.map(function (p) {
+      return '<button class="pack ' + (buyState.packId === p.id ? "sel" : "") + '" data-pack="' + p.id + '">' +
+        (p.best ? '<span class="pack-flag">Best value</span>' : '') +
+        '<span class="pack-credits"><span class="credit-coin" aria-hidden="true"></span>' + p.credits + '</span>' +
+        '<span class="pack-body"><b>' + esc(p.label) + '</b>' +
+        '<span class="muted">' + p.launches + ' launch' + (p.launches === 1 ? "" : "es") + ' · ' + money(p.per) + ' a credit</span></span>' +
+        '<span class="pack-price">' + money(p.price) + '</span></button>';
+    }).join("") + '</div>';
+
+    openSheet(
+      (buyState.reason ? '<p class="q-num">' + esc(buyState.reason) + '</p>' : '') +
+      '<h2 class="q-title">Two ways to launch</h2>' +
+      '<p class="q-help">Both get your prototype into the peer queue. Only one of them moves your builder rank.</p>' +
+      paths + packs +
+      '<button class="btn btn-primary btn-lg btn-block" style="margin-top:16px" data-buy-next>Continue · ' + money(packById(buyState.packId).price) + '</button>' +
+      '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-close-sheet data-go="#/pricing">See Boost and Pro</button>',
+      "Add credits");
+  }
+
+  function renderBuyCheckout() {
+    var p = packById(buyState.packId);
+    openSheet(
+      '<div class="demo-banner">' + ICON.nope +
+      '<span><b>Demo checkout.</b> Nothing is charged and no card details are collected. A real build would open a hosted payment page here.</span></div>' +
+      '<div class="receipt">' +
+      '<div class="ledger-row"><span>' + esc(p.label) + ' pack · ' + p.credits + ' credits</span><b>' + money(p.price) + '</b></div>' +
+      '<div class="ledger-row"><span class="muted">Tax</span><b class="muted">Calculated at checkout</b></div>' +
+      '<div class="ledger-row"><span><b>Total</b></span><b>' + money(p.price) + '</b></div>' +
+      '</div>' +
+      '<div class="payline"><span class="payline-card" aria-hidden="true"></span>' +
+      '<span>Card ending 4242 <span class="muted">(demo)</span></span><span class="tag tag-verified">Simulated</span></div>' +
+      '<button class="btn btn-primary btn-lg btn-block" style="margin-top:16px" data-buy-pay>Pay ' + money(p.price) + '</button>' +
+      '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-buy-back>Back</button>' +
+      '<p class="muted" style="margin-top:14px;text-align:center">' + p.credits + ' credits · never expire · refundable while unspent</p>',
+      "Checkout");
+  }
+
+  function renderBuyDone() {
+    var p = packById(buyState.packId);
+    openSheet(
+      '<div class="reward">' +
+      '<span class="reward-hex"><svg viewBox="0 0 84 92" width="104" height="114" aria-hidden="true">' +
+      '<path d="M42 2 80 24v44L42 90 4 68V24z" fill="var(--honey)"/></svg>' +
+      '<span class="n">+' + p.credits + '</span></span>' +
+      '<h3>' + p.credits + ' credits added</h3>' +
+      '<p>Balance ' + (S.credits) + '. You can launch ' + Math.floor(S.credits / 20) + ' prototype' + (Math.floor(S.credits / 20) === 1 ? "" : "s") + ' right now.</p>' +
+      '<div class="panel panel-quiet" style="text-align:left;margin-top:18px">' +
+      '<div class="ai-head" style="color:var(--text-3)">What this bought</div>' +
+      '<ul class="buy-facts">' +
+      '<li><b>A place in the peer queue.</b> Builders test your prototype and are paid in credits, not cash.</li>' +
+      '<li><b>Not a ranking.</b> Trending and your builder rank still come from testing others — bought credits leave reputation at ' + myRep() + '.</li>' +
+      '<li><b>Need testers we pay?</b> That is Boost: ' + D.BOOST.testers + ' targeted testers in ' + D.BOOST.hours + 'h for ' + money(D.BOOST.price) + '.</li>' +
+      '</ul></div>' +
+      '<div class="rowgap" style="margin-top:18px">' +
+      '<button class="btn btn-primary btn-block" data-close-sheet data-go="#/submit">Launch a prototype</button>' +
+      '<button class="btn btn-ghost btn-block" data-close-sheet>Done</button>' +
+      '</div></div>',
+      "Payment complete");
+  }
+
+  function completePurchase() {
+    var p = packById(buyState.packId);
+    openSheet('<div class="reward"><div class="spinner" aria-hidden="true"></div>' +
+      '<h3 style="margin-top:18px">Processing ' + money(p.price) + '</h3>' +
+      '<p>Simulated — no payment is being taken.</p></div>', "Checkout");
+    setTimeout(function () {
+      addCredits(p.credits, "Bought " + p.credits + " credits (" + money(p.price) + ")", null, "buy");
+      dirty = true;
+      buyState.step = "done";
+      renderBuyDone();
+      toast('<span>💳</span> <b class="mono">+' + p.credits + '</b> credits · ' + money(p.price) + ' (demo)', "credit");
+    }, 950);
+  }
+
+  /* ------------------------------------------------------------------- boost */
+  function openBoost(id) {
+    var p = getProto(id);
+    var already = S.boosted.indexOf(id) > -1;
+    if (already) {
+      openSheet('<div class="reward"><h3>Boost is running</h3><p>' + D.BOOST.testers +
+        ' targeted testers are working through ' + esc(p.name) + '. Results land within ' + D.BOOST.hours + ' hours.</p>' +
+        '<button class="btn btn-ghost btn-block" style="margin-top:18px" data-close-sheet>Done</button></div>', "Boost");
+      return;
+    }
+    openSheet(
+      '<div class="demo-banner">' + ICON.nope + '<span><b>Demo checkout.</b> Nothing is charged.</span></div>' +
+      '<h2 class="q-title">' + D.BOOST.testers + ' testers we pay</h2>' +
+      '<p class="q-help">' + esc(D.BOOST.blurb) + ' Peer credits get you into the queue; Boost buys guaranteed testers, so the money reaches the people doing the work.</p>' +
+      '<div class="panel panel-quiet" style="margin-top:16px">' +
+      '<div class="ai-head" style="color:var(--text-3)">Target</div>' +
+      '<div class="pickers" style="margin-top:10px">' + D.BOOST.filters.map(function (f, i) {
+        return '<span class="pick" aria-pressed="' + (i === 0) + '">' + esc(f) + '</span>';
+      }).join("") + '</div></div>' +
+      '<div class="receipt" style="margin-top:16px">' +
+      '<div class="ledger-row"><span>Boost · ' + D.BOOST.testers + ' targeted testers</span><b>' + money(D.BOOST.price) + '</b></div>' +
+      '<div class="ledger-row"><span class="muted">Paid to testers</span><b class="muted">' + money(D.BOOST.testers * 0.4) + '</b></div>' +
+      '<div class="ledger-row"><span class="muted">Delivered within</span><b class="muted">' + D.BOOST.hours + ' hours</b></div>' +
+      '</div>' +
+      '<button class="btn btn-mint btn-lg btn-block" style="margin-top:16px" data-boost-pay="' + id + '">Pay ' + money(D.BOOST.price) + ' · start in an hour</button>' +
+      '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-close-sheet>Not now</button>' +
+      '<p class="muted" style="margin-top:14px;text-align:center">Capped at today\'s real tester supply. When the panel is full, Boost sells out rather than promising testers who do not exist.</p>',
+      "Boost " + p.name);
+  }
+
+  function payBoost(id) {
+    S.boosted.push(id);
+    S.ledger.unshift({ label: "Boost · " + D.BOOST.testers + " paid testers", amount: 0, kind: "buy", usd: D.BOOST.price });
+    save();
+    dirty = true;
+    closeSheet();
+    toast('<span>🚀</span> Boost live · ' + D.BOOST.testers + ' paid testers queued (demo)');
+    var p = getProto(id);
+    if (p && CUSTOM[id]) simulateIncomingTests(id);
+  }
+
+  /* ----------------------------------------------------------------- pricing */
+  VIEW.pricing = function () {
+    var packs = '<div class="plan-grid">' + D.PACKS.map(function (p) {
+      return '<div class="plan ' + (p.best ? "plan-hi" : "") + '">' +
+        (p.best ? '<span class="pack-flag">Best value</span>' : '') +
+        '<div class="plan-price">' + money(p.price) + '</div>' +
+        '<div class="plan-name">' + p.credits + ' credits</div>' +
+        '<p class="muted">' + p.launches + ' launch' + (p.launches === 1 ? "" : "es") + ' · ' + money(p.per) + ' a credit</p>' +
+        '<button class="btn ' + (p.best ? "btn-primary" : "btn-ghost") + ' btn-block" style="margin-top:12px" data-buy="' + p.id + '">Buy</button></div>';
+    }).join("") + '</div>';
+
+    var rules = [
+      ["Money buys time, not rank", "Bought credits launch a prototype. Only testing raises your builder reputation and your place in Trending — so the people who feed the platform stay ahead of the people who only pay."],
+      ["Two queues, two currencies", "Credit packs put you in the peer queue, where builders test each other for credits. Boost buys the paid panel, where testers are paid cash. Selling credits never quietly drains the tester side."],
+      ["Paid demand is capped by real supply", "Boost sells only as many tests as the panel can deliver that day. Sold out is an honest answer; a promise of 25 testers who do not exist is not."],
+      ["Feedback is paid on usefulness, not volume", "The +2 lands when the builder marks your improvement useful. Twelve tests a day maximum, and a session clock, so farming credits is slower than earning them honestly."],
+      ["The free path never closes", "Welcome credits, and every launch is reachable by testing four prototypes. Kill that and the feed dies, and the feed is the reason anyone visits."]
+    ];
+
+    return '<div class="page-head"><p class="page-kicker">Pricing</p>' +
+      '<h1 class="page-title">Credits, Boost, Pro</h1>' +
+      '<p class="page-sub">Testing is free forever. Money is for builders in a hurry — and it pays for the testers who are not.</p></div>' +
+
+      '<div class="section"><div class="section-head"><h2 class="section-title">Credits</h2>' +
+      '<span class="muted">1 launch = 20 credits</span></div>' + packs +
+      '<p class="muted" style="margin-top:10px">Or earn them: +3 a test, +2 for feedback a builder marks useful, +5 for a post-mortem.</p></div>' +
+
+      '<div class="section"><div class="section-head"><h2 class="section-title">Boost</h2>' +
+      '<span class="muted">the paid panel</span></div>' +
+      '<div class="panel plan-wide"><div class="plan-price">' + money(D.BOOST.price) + '</div>' +
+      '<div class="plan-name">' + D.BOOST.testers + ' targeted testers in ' + D.BOOST.hours + ' hours</div>' +
+      '<p class="muted" style="margin-top:6px">' + esc(D.BOOST.blurb) + ' Roughly ' + money(0.4) + ' a test goes to the tester, which is what keeps the panel staffed on the days peers are slow.</p>' +
+      '<div class="pill-row" style="margin-top:12px">' + D.BOOST.filters.map(function (f) { return '<span class="pill">' + esc(f) + '</span>'; }).join("") + '</div>' +
+      '<button class="btn btn-mint btn-block" style="margin-top:14px" data-go="#/lab">Boost a prototype</button></div></div>' +
+
+      '<div class="section"><div class="section-head"><h2 class="section-title">Pro</h2>' +
+      '<span class="muted">for builders who ship weekly</span></div>' +
+      '<div class="panel plan-wide"><div class="plan-price">' + money(D.PRO.price) + '<span class="plan-per">/month</span></div>' +
+      '<div class="ai-block next" style="margin-top:12px"><ul>' + D.PRO.perks.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>' +
+      '<button class="btn btn-primary btn-block" style="margin-top:6px" data-pro>Start Pro</button></div></div>' +
+
+      '<div class="section"><div class="section-head"><h2 class="section-title">How the economy stays balanced</h2></div>' +
+      '<div class="panel">' + rules.map(function (r, i) {
+        return '<div class="rule"><span class="rule-n mono">' + (i + 1) + '</span>' +
+          '<div><h4>' + esc(r[0]) + '</h4><p class="muted">' + esc(r[1]) + '</p></div></div>';
+      }).join("") + '</div></div>';
   };
 
   /* ------------------------------------------------------------- right rail */
@@ -1053,7 +1313,11 @@
       '<div class="ledger-row"><span>Useful feedback</span><b class="plus">+2</b></div>' +
       '<div class="ledger-row"><span>Publish a post-mortem</span><b class="plus">+5</b></div>' +
       '<div class="ledger-row"><span>Submit a prototype</span><b class="minus">−20</b></div>' +
-      '<button class="btn btn-outline btn-block" style="margin-top:12px" data-go="#/test">Earn credits</button></div>' +
+      '<div class="ledger-row"><span>Buy ' + D.PACKS[0].credits + ' credits</span><b>' + money(D.PACKS[0].price) + '</b></div>' +
+      '<div class="rowgap" style="margin-top:12px">' +
+      '<button class="btn btn-outline" style="flex:1" data-go="#/test">Earn</button>' +
+      '<button class="btn btn-primary" style="flex:1" data-buy-credits="Add credits">Buy</button></div>' +
+      '<p class="muted" style="margin-top:10px">Money buys time, never rank — only testing moves your reputation. <span data-go="#/pricing" style="color:var(--honey);cursor:pointer">How pricing works</span></p></div>' +
 
       '<div class="aside-card"><div class="aside-title">Builders to follow</div>' +
       suggest.map(function (h) {
@@ -1133,6 +1397,7 @@
     else if (seg[0] === "test") html = VIEW.test();
     else if (seg[0] === "submit") html = VIEW.submit();
     else if (seg[0] === "leaderboard") html = VIEW.board();
+    else if (seg[0] === "pricing") html = VIEW.pricing();
     else if (seg[0] === "lab") html = VIEW.lab({ tab: r.query.tab });
     else if (seg[0] === "saved") html = VIEW.saved();
     else html = VIEW.discover({ feed: r.query.feed });
@@ -1200,7 +1465,23 @@
     function closest(sel) { return t.closest ? t.closest(sel) : null; }
 
     var el;
-    if ((el = closest("[data-close-sheet]"))) { closeSheet(); return; }
+    if ((el = closest("[data-buy]"))) { buyState.packId = el.getAttribute("data-buy"); openBuyCredits(""); return; }
+    if ((el = closest("[data-buy-credits]"))) { openBuyCredits(el.getAttribute("data-buy-credits")); return; }
+    if ((el = closest("[data-pack]"))) { buyState.packId = el.getAttribute("data-pack"); renderBuyPick(); return; }
+    if ((el = closest("[data-buy-next]"))) { buyState.step = "checkout"; renderBuyCheckout(); return; }
+    if ((el = closest("[data-buy-back]"))) { buyState.step = "pick"; renderBuyPick(); return; }
+    if ((el = closest("[data-buy-pay]"))) { completePurchase(); return; }
+    if ((el = closest("[data-boost]"))) { openBoost(el.getAttribute("data-boost")); return; }
+    if ((el = closest("[data-boost-pay]"))) { payBoost(el.getAttribute("data-boost-pay")); return; }
+    if ((el = closest("[data-pro]"))) { toast('<span>✨</span> Pro is a demo here — no subscription is started'); return; }
+    if ((el = closest("[data-cashout]"))) {
+      toast(S.earned >= D.PAYOUT.credits
+        ? '<span>💸</span> Payout requested · ' + money(D.PAYOUT.usd) + ' (demo)'
+        : '<span>💸</span> ' + (D.PAYOUT.credits - S.earned) + ' more tested credits to cash out');
+      return;
+    }
+    if ((el = closest("[data-close-sheet]")) && !el.hasAttribute("data-go")) { closeSheet(); return; }
+    if ((el = closest("[data-close-sheet][data-go]"))) { closeSheet(); go(el.getAttribute("data-go")); return; }
     if ((el = closest("[data-test]"))) { closeSheet(); startTest(el.getAttribute("data-test")); return; }
     if ((el = closest("[data-open]"))) { openPrototype(el.getAttribute("data-open")); return; }
     if ((el = closest("[data-answer]"))) {
@@ -1344,7 +1625,10 @@
   });
   applyTheme(S.theme);
 
-  window.addEventListener("hashchange", render);
+  window.addEventListener("hashchange", function () {
+    if (!sheetRoot.hidden) { hideSheet(); dirty = false; }
+    render();
+  });
   render();
   paintCredits();
 

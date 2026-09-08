@@ -258,6 +258,38 @@
     ]
   };
 
+
+  /* ---- Money -------------------------------------------------------------
+     Two products, deliberately different. Credit packs buy a place in the
+     PEER queue (other builders test you, paid in credits — pure margin).
+     Boost buys the PAID panel: real testers, cash-paid, targeted, capped by
+     real supply. Pro is the durable revenue line. */
+  var PACKS = [
+    { id: "starter", label: "Starter", credits: 20,  price: 4.99,  launches: 1,  per: 0.25 },
+    { id: "builder", label: "Builder", credits: 60,  price: 11.99, launches: 3,  per: 0.20, best: true },
+    { id: "studio",  label: "Studio",  credits: 200, price: 28.99, launches: 10, per: 0.14 }
+  ];
+
+  var BOOST = {
+    price: 19, testers: 25, hours: 24,
+    blurb: "Targeted testers we pay, not peers you wait for.",
+    filters: ["Ships code weekly", "Has paid for a tool like this", "Uses it on mobile"]
+  };
+
+  var PRO = {
+    price: 12,
+    perks: [
+      "Unlimited launches — no credits needed",
+      "Private testing before you go public",
+      "Two custom questions on top of the four",
+      "Funnel history and prototype-vs-prototype compare",
+      "AI summary on every batch, from the first tester"
+    ]
+  };
+
+  /* Testers cash out from Boost revenue only — peer tests pay credits. */
+  var PAYOUT = { credits: 100, usd: 8 };
+
   /* AI summaries shown on the creator dashboard, keyed by prototype id. */
   var AI_SUMMARY = {
     shelfquiet: {
@@ -280,6 +312,10 @@
     CATEGORIES: CATEGORIES,
     MY_FIRST: MY_FIRST,
     AI_SUMMARY: AI_SUMMARY,
+    PACKS: PACKS,
+    BOOST: BOOST,
+    PRO: PRO,
+    PAYOUT: PAYOUT,
     ME: "niketan"
   };
 })(window);
