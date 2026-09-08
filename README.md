@@ -61,6 +61,30 @@ trade spelled out: buying is instant, testing is free and is the only thing that
 | Pricing | `#/pricing` | Packs, Boost, Pro, and the five balance rules |
 | Graveyard | `#/discover?feed=grave` | Killed prototypes: what they built, how long, final score, why, what they learned |
 
+## What the platform sells
+
+The product is not a launch listing, it is **evidence**. Three changes carry that:
+
+**The price question asks for a price, then an email.** "Would you pay?" is the least reliable
+question in research, so the test asks which band you would actually put on a card — measured
+against the builder's real asking price — and, if it is not "nothing", asks for an email at that
+price. The report then leads with the gap: *38% said they would pay. 12% handed over an address.*
+That gap is the finding.
+
+**Every tester has a profile.** Asked once (role, shipping cadence, whether they have paid for a
+tool like this), so results cut into segments: *87% of people who record 3+ calls a week would use
+it, versus 47% of occasional creators.* Segments are what make targeted testing worth paying for,
+and they need 12+ sessions before the platform will cut them.
+
+**A Validation Report is the deliverable.** A shareable page — verdict, the email signal, the
+price ladder, segment cuts, verbatim quotes, what to do next — that a builder forwards to a
+cofounder or an investor. Public by design, because a shared report is the best advertisement the
+platform has. The email addresses behind the count are the paid part.
+
+**A 30-day outcome loop** asks every builder what happened: shipped, pivoted, or killed. That
+produces the one dataset no competitor has — *prototypes scoring 75+ shipped 7× more often than
+those under 50* — and killed ones flow into the graveyard with a post-mortem worth +5 credits.
+
 ## Making money without breaking the loop
 
 The scarce resource on ProtoBuzz is not credits, it is **tester attention**. If $4.99 minted the
@@ -69,16 +93,22 @@ cash and credits deliberately buy different things.
 
 **Two products, two queues.**
 
-| | Credit packs | Boost |
-| --- | --- | --- |
-| Price | $4.99 / 20 · $11.99 / 60 · $28.99 / 200 | $19 |
-| What it buys | A place in the **peer queue** | The **paid panel**: 25 targeted testers in 24h |
-| Who tests you | Other builders, paid in credits | Testers paid in cash (~$0.40 a test) |
-| Margin | High — no cash leaves the system | ~$8 after payouts and processing |
+| | Credit packs | Boost | Validation Pack |
+| --- | --- | --- | --- |
+| Price | $4.99 / 20 · $11.99 / 60 · $28.99 / 200 | $39 | $99 |
+| What it buys | A place in the **peer queue** | 25 targeted testers in 24h | 50 testers, the report, the emails, segments |
+| Who tests you | Other builders, paid in credits | Testers paid in cash (~$0.40 a test) | Same, at twice the sample |
+| Guarantee | — | 25 in 24h or you pay nothing | 50 in 48h or you pay nothing |
+| Margin | High — no cash leaves the system | ~$28 after payouts and processing | ~$76 after payouts and processing |
 
-Plus **Pro at $12/month** (unlimited launches, private testing before you go public, two custom
-questions, funnel history, AI summary from the first tester). Packs are the impulse buy that
-converts a stuck builder at 11pm; Pro is the revenue that compounds.
+Plus **Pro at $29/month** (unlimited launches, private testing before you go public, two custom
+questions, a report on every batch, funnel history). Packs are the impulse buy that converts a
+stuck builder at 11pm; the Pack is the deliverable people actually forward; Pro is the revenue
+that compounds.
+
+Pricing is anchored on what the market already clears: PickFu charges ~$1 per poll response and
+$99/mo for a subscription, and the Google Play tester services charge $15–40 for 12–25 testers who
+never write a word of feedback. A guaranteed panel plus a report is worth more than either.
 
 **The five rules that keep it balanced** (all stated in-product on `#/pricing`):
 

@@ -250,7 +250,7 @@
     score: 61, testers: 22, understood: 86, use: 59, pay: 18,
     askedFor: "Is 6 minutes a day too small to be worth paying for?",
     about: "Photograph your shelf. It picks the one book you're most likely to finish, then gives you a 6-minute chunk each morning with the thread from yesterday.",
-    posted: "yesterday", views: 780, visits: 244, feeds: ["needs"],
+    posted: "31 days ago", ageDays: 31, views: 780, visits: 244, feeds: ["needs"],
     reactions: { useful: 51, pay: 9, nope: 14 },
     comments: [
       { by: "hana", verdict: "use", tested: true, when: "20h", text: "6 minutes is the reason it works, not the reason it's cheap. Price it on finishing books, not on minutes.", up: 17 },
@@ -271,24 +271,72 @@
   ];
 
   var BOOST = {
-    price: 19, testers: 25, hours: 24,
+    price: 39, testers: 25, hours: 24,
     blurb: "Targeted testers we pay, not peers you wait for.",
+    guarantee: "25 testers in 24 hours, or you pay nothing.",
     filters: ["Ships code weekly", "Has paid for a tool like this", "Uses it on mobile"]
   };
 
+  /* The deliverable people actually buy: a report with names attached. */
+  var PACK = {
+    price: 99, testers: 50, hours: 48,
+    guarantee: "50 testers in 48 hours, or you pay nothing.",
+    includes: [
+      "50 targeted testers, segmented by who they are",
+      "A shareable Validation Report you can send to anyone",
+      "Every email address left at your price",
+      "Price-ladder breakdown: what they would actually pay",
+      "A 30-day outcome check-in"
+    ]
+  };
+
   var PRO = {
-    price: 12,
+    price: 29,
     perks: [
       "Unlimited launches — no credits needed",
       "Private testing before you go public",
       "Two custom questions on top of the four",
-      "Funnel history and prototype-vs-prototype compare",
-      "AI summary on every batch, from the first tester"
+      "Validation Report on every batch",
+      "Funnel history and prototype-vs-prototype compare"
     ]
   };
 
   /* Testers cash out from Boost revenue only — peer tests pay credits. */
   var PAYOUT = { credits: 100, usd: 8 };
+
+
+  /* What each prototype charges — the anchor the price question is asked against. */
+  var PRICES = {
+    loopcut: "$12/mo", "standup-ghost": "$8/mo", "fridge-oracle": "$4/mo", rentprint: "$19 a lease",
+    "sleep-tape": "$6/mo", tinygrid: "$15/mo", "second-draft": "$5/mo", promptfossil: "$20/mo",
+    "cold-open": "$14/mo", mise: "$3/mo", "doorbell-ai": "$40 one-time", papercut: "$9/mo",
+    chorekit: "$4/mo", "refactor-roulette": "$7/mo", shelfquiet: "$5/mo"
+  };
+
+  /* Who the testers are. Segments are what make targeting worth paying for. */
+  var SEGMENTS = {
+    "Dev Tools":     ["Ships code weekly", "On a team of 5+", "Solo side projects"],
+    "Creative":      ["Records 3+ calls a week", "Publishes weekly", "Occasional creator"],
+    "Consumer":      ["Uses it daily", "Lives with others", "Curious only"],
+    "Productivity":  ["Runs a team", "Solo operator", "Student"],
+    "Health":        ["Already tracks this", "Has a diagnosed issue", "Curious only"],
+    "Fintech":       ["Renting right now", "Signed something this year", "Neither"],
+    "Education":     ["Reads papers weekly", "Student", "Reads outside their field"],
+    "Social":        ["In Slack all day", "Manages people", "Light user"],
+    "Hardware":      ["Owns smart-home kit", "Lives in an apartment block", "No smart devices"],
+    "AI Agents":     ["Builds with agents", "Evaluates tools to buy", "Just watching"]
+  };
+
+  /* Outcome data — nobody else has this, and it is the reason to come back. */
+  var OUTCOMES = {
+    tracked: 1284,
+    lines: [
+      ["Scored 75+", 61, "shipped"],
+      ["Scored 50–74", 28, "shipped"],
+      ["Scored under 50", 9, "shipped"]
+    ],
+    note: "Of 1,284 prototypes we followed for 30 days. Score is measured before the builder knew the outcome."
+  };
 
   /* AI summaries shown on the creator dashboard, keyed by prototype id. */
   var AI_SUMMARY = {
@@ -314,6 +362,10 @@
     AI_SUMMARY: AI_SUMMARY,
     PACKS: PACKS,
     BOOST: BOOST,
+    PACK: PACK,
+    PRICES: PRICES,
+    SEGMENTS: SEGMENTS,
+    OUTCOMES: OUTCOMES,
     PRO: PRO,
     PAYOUT: PAYOUT,
     ME: "niketan"

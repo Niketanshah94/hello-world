@@ -33,6 +33,11 @@
       earned: 0,              /* credits earned by testing — the only kind that cashes out */
       purchased: 0,           /* credits bought with money */
       boosted: [],            /* prototype ids on the paid tester panel */
+      packs: [],              /* prototype ids with a Validation Pack */
+      profile: null,          /* who this tester is — asked once, sold as targeting */
+      emails: {},             /* prototype id -> emails left at a price (demo, local only) */
+      outcomes: {},           /* prototype id -> shipped | pivoted | killed */
+      postMortems: {},        /* prototype id -> what the builder learned */
       ledger: [{ label: "Welcome bonus", amount: 15, kind: "earn" }],
       theme: null
     };
@@ -312,7 +317,7 @@
     return '<div class="metrics">' +
       '<div class="metric m-use"><div class="metric-top"><span class="metric-num">' + p.use + '%</span><span class="metric-label">would use</span></div><div class="meter"><i style="width:' + p.use + '%"></i></div></div>' +
       '<div class="metric m-pay"><div class="metric-top"><span class="metric-num">' + p.pay + '%</span><span class="metric-label">would pay</span></div><div class="meter"><i style="width:' + p.pay + '%"></i></div></div>' +
-      '<div class="metric m-test"><div class="metric-top"><span class="metric-num">' + p.testers + '</span><span class="metric-label">testers</span></div><div class="meter"><i style="width:' + Math.min(100, Math.round(p.testers / 2)) + '%"></i></div></div>' +
+      '<div class="metric m-mail"><div class="metric-top"><span class="metric-num">' + signalOf(p).emails + '</span><span class="metric-label">left an email</span></div><div class="meter"><i style="width:' + Math.min(100, signalOf(p).rate * 4) + '%"></i></div></div>' +
       '</div>';
   }
 
@@ -345,7 +350,8 @@
         '<div class="card-title-row"><h3 class="card-name" data-go="#/p/' + p.id + '">' + esc(p.name) + '</h3></div>' +
         '<p class="card-tag">' + esc(p.tagline) + '</p>' +
         '<div class="byline">' + avatar(p.creator) + '<b data-go="#/u/' + p.creator + '">' + esc(b.name) + '</b>' +
-          '<span class="dot-sep"></span><span>' + esc(p.posted) + '</span></div>' +
+          '<span class="dot-sep"></span><span>' + esc(p.posted) + '</span>' +
+          '<span class="dot-sep"></span><span>' + p.testers + ' testers</span></div>' +
         metricsBlock(p) +
       '</div>' +
       (tested
@@ -405,7 +411,24 @@
 
     var body;
     if (feed === "grave") {
-      body = '<div class="feed">' + D.GRAVEYARD.map(graveCard).join("") +
+      var o = D.OUTCOMES;
+      var mineDead = Object.keys(S.postMortems || {}).map(function (k) {
+        var pm = S.postMortems[k];
+        return { id: k, name: pm.name, builder: D.ME, time: "31 days", score: pm.score, category: pm.category,
+          built: pm.name + " — " + (getProto(k) ? getProto(k).tagline : ""), why: "Killed after " + pm.testers + " testers.", learned: pm.text };
+      });
+      var outcomePanel = '<div class="panel outcome-stats">' +
+        '<div class="ai-head" style="color:var(--text-3)">The only dataset nobody else has</div>' +
+        '<p style="font-size:15px;font-weight:600;margin:10px 0 14px">Prototypes that scored 75+ shipped ' +
+        Math.round(o.lines[0][1] / o.lines[2][1]) + '× more often than those under 50.</p>' +
+        o.lines.map(function (l) {
+          return '<div class="stat-row"><div class="stat-val" style="color:var(--text)">' + l[1] + '%</div>' +
+            '<div class="stat-body"><div class="stat-name">' + esc(l[0]) + ' — ' + esc(l[2]) + '</div>' +
+            '<div class="stat-track"><i style="width:' + l[1] + '%;background:var(--mint)"></i></div></div></div>';
+        }).join("") +
+        '<p class="muted" style="margin-top:12px">' + esc(o.note) + '</p></div>';
+
+      body = '<div class="feed">' + outcomePanel + mineDead.map(graveCard).join("") + D.GRAVEYARD.map(graveCard).join("") +
         '<div class="panel panel-quiet" style="text-align:center">' +
         '<p class="muted">Killed something yourself? Publishing it is worth <b class="mono">+5 credits</b> — the graveyard is the most-read feed on ProtoBuzz.</p>' +
         '<button class="btn btn-ghost" style="margin-top:12px" data-go="#/lab">Publish a post-mortem</button></div></div>';
@@ -501,8 +524,11 @@
       '<div class="stat-rows">' +
         stat("Understood what it does", p.understood, "var(--text-2)") +
         stat("Would use it", p.use, "var(--honey)") +
-        stat("Would pay for it", p.pay, "var(--mint)") +
-      '</div></div>';
+        stat("Would pay something", p.pay, "var(--mint)", "asking " + priceOf(p)) +
+      '</div>' +
+      '<div class="signal-strip"><div><b class="mono">' + signalOf(p).emails + ' of ' + p.testers + '</b> left an email at ' + esc(priceOf(p)) + '</div>' +
+      '<button class="section-more" data-go="#/report/' + p.id + '">Read the report</button></div>' +
+      '</div>';
 
     var cta = '<div class="sticky-cta">' +
       (mine
@@ -517,6 +543,9 @@
       '<div class="divider"></div>' +
       '<div class="ai-head" style="color:var(--text-3)">Creator wants feedback on</div>' +
       '<p style="margin-top:8px;font-size:15.5px;font-weight:600">“' + esc(p.askedFor) + '”</p></div></div>';
+
+    var segSection = '<div class="section"><div class="section-head"><h2 class="section-title">Where the signal is</h2>' +
+      '<span class="muted">by who they are</span></div>' + segmentBlock(p, true) + '</div>';
 
     var creator = '<div class="section"><div class="panel" style="display:flex;gap:13px;align-items:center">' +
       avatar(p.creator, "lg") +
@@ -549,7 +578,7 @@
       '<span class="muted">' + cs.length + ' from verified testers</span></div>' +
       '<div class="panel">' + (commentHtml || '<p class="muted">No feedback yet. Be the first tester.</p>') + composer + '</div></div>';
 
-    return '<button class="back-link" data-back>' + ICON.back + ' Back to feed</button>' + hero + cta + about + creator + comments + reactionBar(p, { full: true });
+    return '<button class="back-link" data-back>' + ICON.back + ' Back to feed</button>' + hero + cta + about + segSection + creator + comments + reactionBar(p, { full: true });
   };
 
   /* --------------------------------------------------------------- sheets */
@@ -611,10 +640,71 @@
       opts: [["Instantly", "y"], ["After a minute", "m"], ["Still not sure", "n"]] },
     { key: "use", q: "Would you use it?", help: "Honestly — this week, for something you actually do.",
       opts: [["Yes, this week", "y"], ["Maybe later", "m"], ["No", "n"]] },
-    { key: "pay", q: "Would you pay for it?", help: "The rarest signal on ProtoBuzz. Do not be polite.",
-      opts: [["Yes, happily", "y"], ["Only if it were cheap", "m"], ["No", "n"]] },
+    { key: "pay", q: "What would you pay for it?", bands: true,
+      opts: [["Nothing", "none"], ["Under $5 a month", "low"], ["$5–15 a month", "mid"], ["$15+ a month", "high"]] },
     { key: "improve", q: "What is the one thing you would improve?", help: "One sentence. This is the part builders actually read.", text: true }
   ];
+
+  var PAY_WEIGHT = { none: 0, low: 0.35, mid: 0.75, high: 1 };
+
+  var PROFILE_Q = [
+    { key: "role", label: "You are a", opts: ["Developer", "Designer", "Founder", "Something else"] },
+    { key: "cadence", label: "You ship", opts: ["Weekly", "Monthly", "Rarely"] },
+    { key: "paid", label: "Tools like this", opts: ["I have paid for one", "Never paid"] }
+  ];
+
+
+  /* --------------------------------------------------------- signal & segments
+     "Would you pay?" is the least reliable question in research, so the platform
+     asks for a price band and then for an email at that price. The email is the
+     only number a builder can act on, so it is the one the report leads with. */
+  function hashOf(id) {
+    var h = 0;
+    for (var i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 9973;
+    return h;
+  }
+
+  function priceOf(p) { return D.PRICES[p.id] || "$9/mo"; }
+
+  function signalOf(p) {
+    var extra = (S.emails[p.id] || []).length;
+    var emails = Math.round(p.testers * (p.pay / 100) * 0.28) + extra;
+    var pay = p.pay;
+    return {
+      price: priceOf(p),
+      emails: emails,
+      rate: p.testers ? Math.round((emails / p.testers) * 100) : 0,
+      bands: [
+        { label: "Nothing", pct: Math.max(0, 100 - pay), none: true },
+        { label: "Under $5", pct: Math.round(pay * 0.33) },
+        { label: "$5–15", pct: Math.round(pay * 0.45) },
+        { label: "$15+", pct: Math.round(pay * 0.22) }
+      ]
+    };
+  }
+
+  var SEG_DEFAULT = ["Uses tools like this weekly", "Has paid for one before", "First time seeing this"];
+  function segmentsOf(p) {
+    if (p.testers < 12) return null;   /* too small a sample to cut honestly */
+    var labels = D.SEGMENTS[p.category] || SEG_DEFAULT;
+    var spread = hashOf(p.id) % 7;     /* deterministic per prototype */
+    var rows = [
+      { w: 0.42, du: 14 + spread, dp: 21 + spread },
+      { w: 0.34, du: -2, dp: -4 },
+      { w: 0.24, du: -22 - spread, dp: -26 - spread }
+    ];
+    var clamp = function (v) { return Math.max(2, Math.min(99, Math.round(v))); };
+    return rows.map(function (r, i) {
+      var nSeg = Math.round(p.testers * r.w);
+      return {
+        label: labels[i],
+        n: nSeg,
+        use: clamp(p.use + r.du),
+        pay: clamp(p.pay + r.dp),
+        emails: Math.round(nSeg * (clamp(p.pay + r.dp) / 100) * 0.28)
+      };
+    });
+  }
 
   /* Reputation is earned, never bought — the rule that keeps both loops alive. */
   function myRep() {
@@ -632,20 +722,59 @@
   function startTest(id) {
     var p = getProto(id);
     if (!p) return;
-    sheetState = { id: id, step: 0, answers: {} };
+    sheetState = { id: id, step: 0, answers: {}, stage: S.profile ? "q" : "profile", draftProfile: {} };
     renderTestStep();
+  }
+
+  /* Asked once. It is also the thing builders pay to target. */
+  function renderProfileStep() {
+    var st = sheetState;
+    var body = '<p class="q-num">One time only</p>' +
+      '<h2 class="q-title">Who is testing?</h2>' +
+      '<p class="q-help">Answered once, then never again. Feedback from a named kind of person is worth more than feedback from nobody in particular.</p>' +
+      PROFILE_Q.map(function (q) {
+        return '<div class="field" style="margin-top:18px"><label>' + esc(q.label) + '</label>' +
+          '<div class="pickers">' + q.opts.map(function (o) {
+            return '<button class="pick" data-profile="' + q.key + '" data-val="' + esc(o) + '" aria-pressed="' +
+              (st.draftProfile[q.key] === o) + '">' + esc(o) + '</button>';
+          }).join("") + '</div></div>';
+      }).join("") +
+      '<button class="btn btn-primary btn-lg btn-block" style="margin-top:20px" data-profile-done>Start testing</button>';
+    openSheet(body, "Your tester profile");
+  }
+
+  /* The email is the whole point: a name attached to a price. */
+  function renderEmailStep() {
+    var st = sheetState;
+    var p = getProto(st.id);
+    var band = QUESTIONS[2].opts.filter(function (o) { return o[1] === st.answers.pay; })[0];
+    var body = '<p class="q-num">The part that counts</p>' +
+      '<h2 class="q-title">Want it at ' + esc(band ? band[0].toLowerCase() : "that price") + '?</h2>' +
+      '<p class="q-help">Leave an email and ' + esc(builder(p.creator).name.split(" ")[0]) +
+      ' can tell you when it ships. Saying you would pay costs nothing; this does not — which is why it is the number the report leads with.</p>' +
+      '<input class="input" id="signal-email" type="email" inputmode="email" placeholder="you@example.com" />' +
+      '<p class="muted" style="margin-top:8px">Demo: the address stays in this browser and is never sent anywhere.</p>' +
+      '<div class="rowgap" style="margin-top:16px">' +
+      '<button class="btn btn-primary btn-lg" style="flex:1" data-email-send>Send it</button>' +
+      '<button class="btn btn-ghost" data-email-skip>No thanks</button></div>';
+    openSheet(body, "Testing " + p.name);
   }
 
   function renderTestStep() {
     var st = sheetState;
+    if (st.stage === "profile") return renderProfileStep();
+    if (st.stage === "email") return renderEmailStep();
     var p = getProto(st.id);
     var q = QUESTIONS[st.step];
     var dots = '<div class="progress-dots" aria-hidden="true">' +
       QUESTIONS.map(function (_, i) { return '<i class="' + (i <= st.step ? "done" : "") + '"></i>'; }).join("") + '</div>';
 
+    var help = q.bands
+      ? "Pick the band you would actually put on a card. " + esc(p.name) + " is asking " + esc(priceOf(p)) + "."
+      : q.help;
     var body = '<p class="q-num">Question ' + (st.step + 1) + " of 4 · " + esc(p.name) + '</p>' +
       '<h2 class="q-title">' + esc(q.q) + '</h2>' +
-      '<p class="q-help">' + esc(q.help) + '</p>';
+      '<p class="q-help">' + esc(help) + '</p>';
 
     if (q.text) {
       body += '<textarea class="q-textarea" id="improve-box" placeholder="e.g. Show the generated formula — trust comes from the escape hatch.">' + esc(st.answers.improve || "") + '</textarea>' +
@@ -677,18 +806,24 @@
     var beforeScore = p.score;
     if (p.scoreOffset == null) p.scoreOffset = p.score - scoreFormula(p);
     var t = p.testers + 1;
-    function blend(pct, vote) { return Math.round(((pct / 100) * p.testers + (vote === "y" ? 1 : vote === "m" ? 0.5 : 0)) / t * 100); }
-    p.understood = blend(p.understood, st.answers.understood);
-    p.use = blend(p.use, st.answers.use);
-    p.pay = blend(p.pay, st.answers.pay);
+    function blend(pct, w) { return Math.round(((pct / 100) * p.testers + w) / t * 100); }
+    function w3(v) { return v === "y" ? 1 : v === "m" ? 0.5 : 0; }
+    p.understood = blend(p.understood, w3(st.answers.understood));
+    p.use = blend(p.use, w3(st.answers.use));
+    p.pay = blend(p.pay, PAY_WEIGHT[st.answers.pay] || 0);
     p.testers = t;
     p.score = Math.max(1, Math.min(99, scoreFormula(p) + p.scoreOffset));
     var delta = p.score - beforeScore;
 
+    if (st.answers.email) {
+      if (!S.emails[p.id]) S.emails[p.id] = [];
+      S.emails[p.id].push({ at: priceOf(p), band: st.answers.pay });
+    }
+
     var earned = 3;
     if (improve) {
       earned = 5;
-      var verdict = st.answers.pay === "y" ? "pay" : st.answers.use === "n" ? "nope" : "use";
+      var verdict = (st.answers.pay === "high" || st.answers.pay === "mid") ? "pay" : st.answers.use === "n" ? "nope" : "use";
       if (!S.comments[p.id]) S.comments[p.id] = [];
       S.comments[p.id].push({ by: D.ME, verdict: verdict, tested: true, when: "just now", text: improve, up: 0 });
     }
@@ -704,6 +839,7 @@
       '<div class="reward-ledger">' +
       '<div class="ledger-row"><span>Tested ' + esc(p.name) + '</span><b class="plus">+3</b></div>' +
       (improve ? '<div class="ledger-row"><span>Useful feedback</span><b class="plus">+2</b></div>' : '') +
+      (st.answers.email ? '<div class="ledger-row"><span>Left an email at ' + esc(priceOf(p)) + '</span><b class="plus">signal</b></div>' : '') +
       '<div class="ledger-row"><span><b>Balance</b></span><b>' + (S.credits + earned) + '</b></div>' +
       '</div>' +
       '<div class="panel panel-quiet" style="text-align:left;margin-top:6px">' +
@@ -907,7 +1043,10 @@
         ? 'Results land as they finish. Peer testers keep arriving alongside them.'
         : esc(D.BOOST.blurb) + ' ' + money(D.BOOST.price) + ' — about ' + money(0.4) + ' of it reaches each tester.') + '</p></div>' +
       '<span class="boost-price mono">' + (boosted ? "LIVE" : money(D.BOOST.price)) + '</span></div>' +
-      (boosted ? '' : '<button class="btn btn-mint btn-block" style="margin-top:14px" data-boost="' + p.id + '">Boost this prototype</button>') +
+      '<p class="muted" style="margin-top:10px"><b>' + esc(D.BOOST.guarantee) + '</b></p>' +
+      (boosted ? '' : '<div class="rowgap" style="margin-top:14px">' +
+        '<button class="btn btn-mint" style="flex:1" data-boost="' + p.id + '">Boost · ' + money(D.BOOST.price) + '</button>' +
+        '<button class="btn btn-primary" style="flex:1" data-pack="' + p.id + '">Validation Pack · ' + money(D.PACK.price) + '</button></div>') +
       '</div></div>';
 
     return '<button class="back-link" data-back>' + ICON.back + ' Back</button>' +
@@ -917,6 +1056,8 @@
       '<div class="panel" style="display:flex;gap:16px;align-items:center;margin-bottom:14px">' + hex(p.score, "lg") +
       '<div><div class="verdict-label">Validation score</div><div class="verdict-line">' + esc(tests < 5 ? "Too early to call — needs testers." : verdictLine(p)) + '</div>' +
       '<p class="muted" style="margin-top:6px">' + tests + ' verified testers · ' + esc(p.stage) + ' · ' + esc(p.category) + '</p></div></div>' +
+      '<div class="signal-strip" style="margin-bottom:14px"><div><b class="mono">' + signalOf(p).emails + ' of ' + tests + '</b> left an email at ' + esc(priceOf(p)) + '</div>' +
+      '<button class="section-more" data-go="#/report/' + p.id + '">Open validation report</button></div>' +
       '<div class="section"><div class="section-head"><h2 class="section-title">Funnel</h2><span class="muted">last 7 days</span></div>' +
       '<div class="panel">' + funnel + '</div></div>' +
       '<div class="section"><div class="section-head"><h2 class="section-title">What the tests say</h2></div>' + aiHtml + '</div>' +
@@ -1005,9 +1146,12 @@
         '<div class="lab-stat"><b>' + (me ? graves.length : b.killed) + '</b><span>killed</span></div>' +
         '<div class="lab-stat"><b>' + (me ? Object.keys(S.tested).length : b.tests) + '</b><span>tested</span></div>' +
       '</div>' +
-      '<div class="rep-bar"><span class="rep-label">Builder reputation</span>' +
-      '<span class="rep-track"><i style="width:' + b.rep + '%"></i></span>' +
-      '<span class="rep-label mono">' + b.rep + '</span></div>' +
+      (function () {
+        var rep = me ? myRep() : b.rep;
+        return '<div class="rep-bar"><span class="rep-label">Builder reputation</span>' +
+          '<span class="rep-track"><i style="width:' + rep + '%"></i></span>' +
+          '<span class="rep-label mono">' + rep + '</span></div>';
+      })() +
       (me ? '<div class="rep-bar"><span class="rep-label">Credits</span>' +
         '<span class="rep-track"><i data-credit-bar style="width:' + Math.min(100, S.credits / 20 * 100) + '%;background:var(--honey)"></i></span>' +
         '<span class="rep-label mono" data-credits>' + S.credits + '</span></div>' +
@@ -1048,11 +1192,13 @@
       body = launched.length ? '<div class="mini-list">' + launched.map(function (p) { return miniRow(p); }).join("") + '</div>'
                              : '<div class="empty"><h3>Nothing launched yet</h3><p>' + (me ? "An experiment becomes a launch when it earns a validation score above 70 with 25+ testers." : "No shipped products yet.") + '</p></div>';
     } else {
+      var due = mine.filter(outcomeDue).map(outcomeCard).join("");
       body = mine.length
-        ? '<div class="mini-list">' + mine.map(function (p) {
+        ? due + '<div class="mini-list">' + mine.map(function (p) {
             return '<div class="mini" data-go="' + (p.creator === D.ME ? "#/dash/" + p.id : "#/p/" + p.id) + '">' + mock(p) +
               '<div class="mini-body"><div class="mini-name">' + esc(p.name) + '</div>' +
-              '<div class="mini-sub">' + esc(p.stage) + ' · ' + p.testers + ' testers · ' + p.use + '% would use</div>' +
+              '<div class="mini-sub">' + esc(p.stage) + ' · ' + p.testers + ' testers · ' + p.use + '% would use' +
+              (S.outcomes[p.id] ? ' · <b style="color:' + (S.outcomes[p.id] === "shipped" ? "var(--mint)" : S.outcomes[p.id] === "killed" ? "var(--rose)" : "var(--honey)") + '">' + S.outcomes[p.id] + '</b>' : '') + '</div>' +
               (me ? '<button class="btn btn-ghost" style="margin-top:8px;padding:6px 12px;font-size:12.5px" data-boost="' + p.id + '">' +
                 (S.boosted.indexOf(p.id) > -1 ? "Boost running" : "Boost · " + money(D.BOOST.price)) + '</button>' : '') +
               '</div><div class="mini-right">' + hex(p.score) + '</div></div>';
@@ -1239,6 +1385,216 @@
     if (p && CUSTOM[id]) simulateIncomingTests(id);
   }
 
+
+
+  /* --------------------------------------------------------- validation pack */
+  function openPack(id) {
+    var p = getProto(id);
+    openSheet(
+      '<div class="demo-banner">' + ICON.nope + '<span><b>Demo checkout.</b> Nothing is charged.</span></div>' +
+      '<h2 class="q-title">Validation Pack</h2>' +
+      '<p class="q-help">' + esc(D.PACK.guarantee) + '</p>' +
+      '<div class="panel panel-quiet" style="margin-top:16px"><ul class="buy-facts" style="margin-top:0">' +
+      D.PACK.includes.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>' +
+      '<div class="receipt" style="margin-top:16px">' +
+      '<div class="ledger-row"><span>Validation Pack · ' + esc(p.name) + '</span><b>' + money(D.PACK.price) + '</b></div>' +
+      '<div class="ledger-row"><span class="muted">Paid to testers</span><b class="muted">' + money(D.PACK.testers * 0.4) + '</b></div>' +
+      '<div class="ledger-row"><span class="muted">Delivered within</span><b class="muted">' + D.PACK.hours + ' hours</b></div>' +
+      '</div>' +
+      '<button class="btn btn-mint btn-lg btn-block" style="margin-top:16px" data-pack-pay="' + id + '">Pay ' + money(D.PACK.price) + '</button>' +
+      '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-close-sheet>Not now</button>',
+      "Validation Pack");
+  }
+
+  function payPack(id) {
+    if (S.packs.indexOf(id) === -1) S.packs.push(id);
+    if (S.boosted.indexOf(id) === -1) S.boosted.push(id);
+    S.ledger.unshift({ label: "Validation Pack · " + D.PACK.testers + " testers", amount: 0, kind: "buy", usd: D.PACK.price });
+    save();
+    dirty = true;
+    closeSheet();
+    go("#/report/" + id);
+    toast('<span>📄</span> Pack live · report unlocked, ' + D.PACK.testers + ' testers queued (demo)');
+  }
+
+  /* ------------------------------------------------------- 30-day outcome loop
+     The question nobody else asks, and the only data that compounds. */
+  function outcomeDue(p) {
+    return p.creator === D.ME && (p.ageDays || 0) >= 30 && !S.outcomes[p.id];
+  }
+
+  function setOutcome(id, outcome) {
+    S.outcomes[id] = outcome;
+    save();
+    if (outcome === "killed") {
+      openSheet(
+        '<p class="q-num">Post-mortem</p><h2 class="q-title">What did you learn?</h2>' +
+        '<p class="q-help">One honest paragraph. The graveyard is the most-read feed on ProtoBuzz, and publishing pays 5 credits.</p>' +
+        '<textarea class="q-textarea" id="pm-box" placeholder="e.g. 6 minutes a day was the wrong unit — people wanted to finish a book, not spend minutes."></textarea>' +
+        '<button class="btn btn-primary btn-lg btn-block" style="margin-top:16px" data-pm="' + id + '">Publish post-mortem · +5</button>' +
+        '<button class="btn btn-ghost btn-block" style="margin-top:10px" data-close-sheet>Keep it private</button>',
+        "Killed it");
+      return;
+    }
+    render();
+    toast(outcome === "shipped"
+      ? '<span>🚢</span> Marked shipped — that goes into the outcome data'
+      : '<span>🔀</span> Marked pivoted — the old score stays on the record');
+  }
+
+  function publishPostMortem(id) {
+    var box = byId("pm-box");
+    var text = box ? box.value.trim() : "";
+    if (!text) { if (box) box.focus(); return; }
+    var p = getProto(id);
+    S.outcomes[id] = "killed";
+    S.postMortems = S.postMortems || {};
+    S.postMortems[id] = { name: p.name, text: text, score: p.score, testers: p.testers, category: p.category };
+    save();
+    dirty = true;
+    addCredits(5, "Published post-mortem", null);
+    closeSheet();
+    go("#/discover?feed=grave");
+    toast('<span>💀</span> Post-mortem published · <b class="mono">+5</b> credits', "credit");
+  }
+
+  function outcomeCard(p) {
+    return '<div class="panel outcome-card">' +
+      '<div class="verdict-label">30 days later</div>' +
+      '<div class="verdict-line" style="margin-top:4px">' + esc(p.name) + ' launched ' + p.ageDays + ' days ago. What happened?</div>' +
+      '<p class="muted" style="margin-top:6px">Answering builds the only dataset nobody else has: which validation scores actually became products.</p>' +
+      '<div class="rowgap" style="margin-top:14px">' +
+      '<button class="btn btn-mint" data-outcome="shipped" data-id2="' + p.id + '">Shipped it</button>' +
+      '<button class="btn btn-ghost" data-outcome="pivoted" data-id2="' + p.id + '">Pivoted</button>' +
+      '<button class="btn btn-ghost" data-outcome="killed" data-id2="' + p.id + '">Killed it</button>' +
+      '</div></div>';
+  }
+
+  /* ------------------------------------------------------- validation report
+     The artifact a builder actually buys and forwards to a cofounder. Public and
+     shareable by design; the email addresses behind the count are the paid part. */
+  function meterRow(label, value, color, sub) {
+    return '<div class="stat-row"><div class="stat-val" style="color:' + color + '">' + value + '%</div>' +
+      '<div class="stat-body"><div class="stat-name">' + esc(label) + (sub ? ' <span class="muted">' + esc(sub) + '</span>' : '') + '</div>' +
+      '<div class="stat-track"><i style="width:' + value + '%;background:' + color + '"></i></div></div></div>';
+  }
+
+  function priceLadder(sig) {
+    var top = Math.max.apply(null, sig.bands.map(function (b) { return b.pct; })) || 1;
+    return '<div class="ladder">' + sig.bands.map(function (b) {
+      var w = Math.max(2, Math.round((b.pct / top) * 100));
+      return '<div class="ladder-row"><span class="ladder-label">' + esc(b.label) + '</span>' +
+        '<span class="ladder-bar"><i style="width:' + w + '%;background:' + (b.none ? "var(--slate)" : "var(--mint)") + '"></i></span>' +
+        '<span class="ladder-val mono">' + b.pct + '%</span></div>';
+    }).join("") + '</div>';
+  }
+
+  function segmentBlock(p, locked) {
+    var segs = segmentsOf(p);
+    if (!segs) {
+      return '<div class="panel panel-quiet"><p class="muted">Segments need at least 12 tested sessions. ' +
+        esc(p.name) + ' has ' + p.testers + '.</p></div>';
+    }
+    return '<div class="panel"><div class="seg-legend">' +
+      '<span><i style="background:var(--honey)"></i>Would use</span>' +
+      '<span><i style="background:var(--mint)"></i>Would pay</span></div>' +
+      segs.map(function (g) {
+        return '<div class="segrow"><div class="segrow-top"><b>' + esc(g.label) + '</b>' +
+          '<span class="muted mono">' + g.n + ' testers</span></div>' +
+          '<div class="segbars">' +
+          '<span class="segbar"><i style="width:' + g.use + '%;background:var(--honey)"></i></span>' +
+          '<span class="segval mono" style="color:var(--honey)">' + g.use + '%</span>' +
+          '</div>' +
+          '<div class="segbars">' +
+          '<span class="segbar"><i style="width:' + g.pay + '%;background:var(--mint)"></i></span>' +
+          '<span class="segval mono" style="color:var(--mint)">' + g.pay + '%</span>' +
+          '</div>' +
+          (locked ? '' : '<p class="muted" style="margin-top:7px">' + g.emails + ' left an email</p>') +
+          '</div>';
+      }).join("") + '</div>';
+  }
+
+  VIEW.report = function (params) {
+    var p = getProto(params.id);
+    if (!p) return '<div class="empty"><h3>Report not found</h3></div>';
+    var sig = signalOf(p);
+    var mine = p.creator === D.ME;
+    var unlocked = S.packs.indexOf(p.id) > -1;
+    var ai = D.AI_SUMMARY[p.id];
+    var quotes = commentsOf(p).slice(0, 3);
+    var segs = segmentsOf(p);
+    var best = segs ? segs[0] : null;
+
+    var head = '<div class="report-head">' +
+      '<div class="report-brand"><span class="brand-mark" aria-hidden="true">' +
+      '<svg viewBox="0 0 24 26"><path d="M12 1 22.4 7v12L12 25 1.6 19V7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>' +
+      '<path d="M6.6 15.4c1.6-3.4 3.2-3.4 4.8 0s3.2 3.4 4.8 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>' +
+      '<span>Validation Report</span></div>' +
+      '<h1 class="page-title" style="margin-top:10px">' + esc(p.name) + '</h1>' +
+      '<p class="page-sub">' + esc(p.tagline) + '</p>' +
+      '<p class="muted mono" style="margin-top:10px">' + p.testers + ' verified testers · asking ' + esc(sig.price) + ' · ' + esc(p.stage) + '</p>' +
+      '</div>';
+
+    var verdict = '<div class="panel" style="display:flex;gap:16px;align-items:center;margin-bottom:14px">' + hex(p.score, "lg") +
+      '<div><div class="verdict-label">Validation score</div>' +
+      '<div class="verdict-line">' + esc(verdictLine(p)) + '</div>' +
+      (best ? '<p class="muted" style="margin-top:6px">Strongest with <b>' + esc(best.label.toLowerCase()) + '</b> — ' + best.pay + '% of them would pay.</p>' : '') +
+      '</div></div>';
+
+    /* The headline is a number someone acted on, not one they agreed with. */
+    var hero = '<div class="signal-card">' +
+      '<div class="signal-num mono">' + sig.emails + '<span> of ' + p.testers + '</span></div>' +
+      '<p class="signal-line">testers left an email at <b>' + esc(sig.price) + '</b></p>' +
+      '<p class="muted" style="margin-top:8px">' + p.pay + '% <em>said</em> they would pay. ' + sig.rate +
+      '% actually handed over an address. The gap between those two numbers is the finding.</p>' +
+      (mine
+        ? (unlocked
+            ? '<div class="email-list">' + Array.apply(null, Array(Math.min(4, sig.emails))).map(function (_, i) {
+                return '<span class="email-chip mono">tester' + (i + 1) + '@' + ["gmail.com", "hey.com", "outlook.com", "fastmail.com"][i % 4] + '</span>';
+              }).join("") + (sig.emails > 4 ? '<span class="email-chip mono">+' + (sig.emails - 4) + ' more</span>' : '') + '</div>'
+            : '<div class="locked-row">' + ICON.save + '<span>' + sig.emails + ' addresses are yours with the Validation Pack</span>' +
+              '<button class="btn btn-mint" data-pack="' + p.id + '">' + money(D.PACK.price) + '</button></div>')
+        : '<p class="muted" style="margin-top:10px">Addresses go to the builder only.</p>') +
+      '</div>';
+
+    var evidence = '<div class="section"><div class="section-head"><h2 class="section-title">What they would pay</h2>' +
+      '<span class="muted">asking ' + esc(sig.price) + '</span></div>' +
+      '<div class="panel">' + priceLadder(sig) + '</div></div>';
+
+    var stats = '<div class="section"><div class="section-head"><h2 class="section-title">The three questions</h2></div>' +
+      '<div class="panel"><div class="stat-rows" style="padding:0">' +
+      meterRow("Understood what it does", p.understood, "var(--text-2)") +
+      meterRow("Would use it", p.use, "var(--honey)") +
+      meterRow("Would pay something", p.pay, "var(--mint)") +
+      '</div></div></div>';
+
+    var segments = '<div class="section"><div class="section-head"><h2 class="section-title">Where the signal is</h2>' +
+      '<span class="muted">by who they are</span></div>' + segmentBlock(p, !mine || !unlocked) + '</div>';
+
+    var voices = quotes.length ? '<div class="section"><div class="section-head"><h2 class="section-title">In their words</h2></div>' +
+      '<div class="panel">' + quotes.map(function (c) {
+        var tagClass = c.verdict === "pay" ? "tag-pay" : c.verdict === "nope" ? "tag-nope" : "tag-use";
+        return '<blockquote class="quote"><p>“' + esc(c.text) + '”</p>' +
+          '<footer><span class="tag ' + tagClass + '">' + (c.verdict === "pay" ? "Would pay" : c.verdict === "nope" ? "Not for me" : "Would use") + '</span>' +
+          '<span class="muted">' + esc(builder(c.by).name) + ', verified tester</span></footer></blockquote>';
+      }).join("") + '</div></div>' : "";
+
+    var next = ai ? '<div class="section"><div class="section-head"><h2 class="section-title">What to do next</h2></div>' +
+      '<div class="ai-summary"><div class="ai-block next" style="margin-top:0"><ul>' +
+      ai.next.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div></div></div>' : "";
+
+    var foot = '<div class="report-foot">' +
+      '<p class="muted">Generated by ProtoBuzz from ' + p.testers + ' verified test sessions. Every tester opened the prototype before answering.</p>' +
+      '<div class="rowgap" style="margin-top:12px">' +
+      '<button class="btn btn-ghost" data-share="' + p.id + '">Share report</button>' +
+      '<button class="btn btn-ghost" data-export>Export PDF</button>' +
+      (mine ? '<button class="btn btn-primary" data-go="#/dash/' + p.id + '">Back to dashboard</button>' : '') +
+      '</div></div>';
+
+    return '<button class="back-link" data-back>' + ICON.back + ' Back</button>' +
+      '<article class="report">' + head + verdict + hero + evidence + stats + segments + voices + next + foot + '</article>';
+  };
+
   /* ----------------------------------------------------------------- pricing */
   VIEW.pricing = function () {
     var packs = '<div class="plan-grid">' + D.PACKS.map(function (p) {
@@ -1260,19 +1616,29 @@
 
     return '<div class="page-head"><p class="page-kicker">Pricing</p>' +
       '<h1 class="page-title">Credits, Boost, Pro</h1>' +
-      '<p class="page-sub">Testing is free forever. Money is for builders in a hurry — and it pays for the testers who are not.</p></div>' +
+      '<p class="page-sub">Testing is free forever. Money buys guaranteed testers and the report you can forward to someone else — and it pays the testers who are not here for credits.</p></div>' +
 
       '<div class="section"><div class="section-head"><h2 class="section-title">Credits</h2>' +
       '<span class="muted">1 launch = 20 credits</span></div>' + packs +
       '<p class="muted" style="margin-top:10px">Or earn them: +3 a test, +2 for feedback a builder marks useful, +5 for a post-mortem.</p></div>' +
 
-      '<div class="section"><div class="section-head"><h2 class="section-title">Boost</h2>' +
-      '<span class="muted">the paid panel</span></div>' +
+      '<div class="section"><div class="section-head"><h2 class="section-title">Testers, guaranteed</h2>' +
+      '<span class="muted">we pay them, so we can promise them</span></div>' +
+      '<div class="plan-grid" style="grid-template-columns:1fr">' +
       '<div class="panel plan-wide"><div class="plan-price">' + money(D.BOOST.price) + '</div>' +
-      '<div class="plan-name">' + D.BOOST.testers + ' targeted testers in ' + D.BOOST.hours + ' hours</div>' +
-      '<p class="muted" style="margin-top:6px">' + esc(D.BOOST.blurb) + ' Roughly ' + money(0.4) + ' a test goes to the tester, which is what keeps the panel staffed on the days peers are slow.</p>' +
+      '<div class="plan-name">Boost · ' + D.BOOST.testers + ' targeted testers in ' + D.BOOST.hours + ' hours</div>' +
+      '<p class="guarantee">' + esc(D.BOOST.guarantee) + '</p>' +
+      '<p class="muted" style="margin-top:8px">' + esc(D.BOOST.blurb) + ' About ' + money(0.4) + ' a test reaches the tester, which is what keeps the panel staffed on the days peers are slow.</p>' +
       '<div class="pill-row" style="margin-top:12px">' + D.BOOST.filters.map(function (f) { return '<span class="pill">' + esc(f) + '</span>'; }).join("") + '</div>' +
-      '<button class="btn btn-mint btn-block" style="margin-top:14px" data-go="#/lab">Boost a prototype</button></div></div>' +
+      '<button class="btn btn-mint btn-block" style="margin-top:14px" data-go="#/lab">Boost a prototype</button></div>' +
+      '<div class="panel plan-wide plan-hi"><span class="pack-flag">Most bought</span>' +
+      '<div class="plan-price">' + money(D.PACK.price) + '</div>' +
+      '<div class="plan-name">Validation Pack · ' + D.PACK.testers + ' testers and the report</div>' +
+      '<p class="guarantee">' + esc(D.PACK.guarantee) + '</p>' +
+      '<div class="ai-block next" style="margin-top:12px"><ul>' +
+      D.PACK.includes.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>' +
+      '<button class="btn btn-primary btn-block" data-go="#/lab">Buy for a prototype</button></div>' +
+      '</div></div>' +
 
       '<div class="section"><div class="section-head"><h2 class="section-title">Pro</h2>' +
       '<span class="muted">for builders who ship weekly</span></div>' +
@@ -1398,6 +1764,7 @@
     else if (seg[0] === "submit") html = VIEW.submit();
     else if (seg[0] === "leaderboard") html = VIEW.board();
     else if (seg[0] === "pricing") html = VIEW.pricing();
+    else if (seg[0] === "report" && seg[1]) html = VIEW.report({ id: seg[1] });
     else if (seg[0] === "lab") html = VIEW.lab({ tab: r.query.tab });
     else if (seg[0] === "saved") html = VIEW.saved();
     else html = VIEW.discover({ feed: r.query.feed });
@@ -1472,6 +1839,11 @@
     if ((el = closest("[data-buy-back]"))) { buyState.step = "pick"; renderBuyPick(); return; }
     if ((el = closest("[data-buy-pay]"))) { completePurchase(); return; }
     if ((el = closest("[data-boost]"))) { openBoost(el.getAttribute("data-boost")); return; }
+    if ((el = closest("[data-pack]"))) { openPack(el.getAttribute("data-pack")); return; }
+    if ((el = closest("[data-pack-pay]"))) { payPack(el.getAttribute("data-pack-pay")); return; }
+    if ((el = closest("[data-outcome]"))) { setOutcome(el.getAttribute("data-id2"), el.getAttribute("data-outcome")); return; }
+    if ((el = closest("[data-pm]"))) { publishPostMortem(el.getAttribute("data-pm")); return; }
+    if ((el = closest("[data-export]"))) { toast('<span>📄</span> PDF export is stubbed in this prototype'); return; }
     if ((el = closest("[data-boost-pay]"))) { payBoost(el.getAttribute("data-boost-pay")); return; }
     if ((el = closest("[data-pro]"))) { toast('<span>✨</span> Pro is a demo here — no subscription is started'); return; }
     if ((el = closest("[data-cashout]"))) {
@@ -1486,9 +1858,52 @@
     if ((el = closest("[data-open]"))) { openPrototype(el.getAttribute("data-open")); return; }
     if ((el = closest("[data-answer]"))) {
       var q = QUESTIONS[sheetState.step];
-      sheetState.answers[q.key] = el.getAttribute("data-answer");
+      var val = el.getAttribute("data-answer");
+      sheetState.answers[q.key] = val;
       el.classList.add("sel");
-      setTimeout(function () { sheetState.step++; renderTestStep(); }, 170);
+      setTimeout(function () {
+        /* A paying band earns the one question worth asking: your email. */
+        if (q.key === "pay" && val !== "none") sheetState.stage = "email";
+        else sheetState.step++;
+        renderTestStep();
+      }, 170);
+      return;
+    }
+    if ((el = closest("[data-profile]"))) {
+      sheetState.draftProfile[el.getAttribute("data-profile")] = el.getAttribute("data-val");
+      renderProfileStep();
+      return;
+    }
+    if ((el = closest("[data-profile-done]"))) {
+      var dp = sheetState.draftProfile;
+      S.profile = {
+        role: dp.role || "Something else",
+        cadence: dp.cadence || "Monthly",
+        paid: dp.paid || "Never paid"
+      };
+      save();
+      sheetState.stage = "q";
+      renderTestStep();
+      return;
+    }
+    if ((el = closest("[data-email-send]"))) {
+      var box = byId("signal-email");
+      var val2 = box ? box.value.trim() : "";
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(val2)) {
+        if (box) box.focus();
+        toast('<span>⚠️</span> That does not look like an email');
+        return;
+      }
+      sheetState.answers.email = true;
+      sheetState.stage = "q";
+      sheetState.step++;
+      renderTestStep();
+      return;
+    }
+    if ((el = closest("[data-email-skip]"))) {
+      sheetState.stage = "q";
+      sheetState.step++;
+      renderTestStep();
       return;
     }
     if ((el = closest("[data-finish]"))) { finishTest(el.hasAttribute("data-skip")); return; }
