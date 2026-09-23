@@ -12,6 +12,10 @@ around one hierarchy:
 Tested  >  Would Use  >  Would Pay  >  Useful  >  Like
 ```
 
+**Building the real thing?** [`PROTOBUZZ.md`](PROTOBUZZ.md) is the full product and build
+specification — idea, product rules, exact formulas, data model, money, integrity rules and build
+order, written for a Laravel + Bootstrap implementation.
+
 ## Run it
 
 No build step, no dependencies. Open `index.html` in a browser, or serve the folder:
